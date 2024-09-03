@@ -30,15 +30,15 @@ const MAX: usize = 3;
 fn main() {
 
     // let dictionary = vec![String::from("space"), String::from("place"), String::from("craze"), String::from("crate"), String::from("state"), String::from("plate"), String::from("blade"), String::from("blato"), String::from("care"), String::from("spar")];
-    let dictionary: Vec<String> = readDictionary("./src/subst_sk.txt");
+    let dictionary: Vec<String> = readDictionary("./res/en.dr");
     // filter using ruleset
     println!("reading dictionary started");
     let started = SystemTime::now();
     let filteredDictionary: Vec<String> = dictionary.iter().map(|stn| unidecode(stn.to_lowercase().as_str())).filter(|e| e.len() > MAX).collect();
 
     println!("size of dic {} read in {}", filteredDictionary.len(), started.elapsed().unwrap().as_millis());
-    const ROWS: usize = 19;
-    const COLS: usize = 24;
+    const ROWS: usize = 10;
+    const COLS: usize = 10;
     // const ROWS: usize = 6;
     // const COLS: usize = 6;
 

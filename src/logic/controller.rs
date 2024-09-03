@@ -18,6 +18,7 @@ pub struct GameController {
     dictionary: Trie,
     solution: Solution,
     used: Vec<String>,
+    historyStates: Vec<Vec<Word>>,
     // should we cache for whole controller loop?
     cache: HashMap<String, HashSet<String>>
 }
@@ -37,6 +38,7 @@ impl GameController {
             dictionary: trie,
             solution: Solution::new(solution, rows, cols),
             used: Vec::new(),
+            historyStates: Vec::new(),
             cache: HashMap::new()
         };
 
@@ -65,7 +67,7 @@ impl GameController {
             .unwrap_or(0)
     }
 
-    pub fn selectWord(&mut self, possibleWords: &Vec<Vec<Word>>) -> Word {
+    pub fn selectWords(&mut self, possibleWords: &Vec<Vec<Word>>) -> Vec<Word> {
         let entropyMin = self.getMinimumEntropy(possibleWords);
         if (entropyMin == 0) {
             panic!("Cannot be initiated")
@@ -79,15 +81,12 @@ impl GameController {
             .filter(|words| words.len() == entropyMin)
             .for_each(|words| savedWords.extend(words.clone()));
 
-        let randomWord: Word = savedWords
+        let randomWords: Vec<Word> = savedWords
             .choose_multiple(&mut thread_rng(), savedWords.len())
-            .cloned().collect::<Vec<Word>>()
-            .first()
-            .unwrap()
-            .clone();
+            .cloned().collect::<Vec<Word>>();
 
-        println!("min {} dir {} words {} R{}C{}", entropyMin, randomWord.direction.getIndex(), randomWord.word, randomWord.coords.0, randomWord.coords.1);
-        return randomWord;
+        // println!("min {} dir {} words {} R{}C{}", entropyMin, randomWord.direction.getIndex(), randomWord.word, randomWord.coords.0, randomWord.coords.1);
+        return randomWords;
     }
 
     pub fn printEntropies(&self, entropies: &Vec<HashSet<Word>>) {
@@ -107,14 +106,15 @@ impl GameController {
 
         let allPossibleWords = &self.calculatePossibleWords();
         // self.printEntropies(entropy);
-        let word = &self.selectWord(allPossibleWords);
+        // TODO : Word Selection should take previous steps into consideration because it might get stuck
+        let words = &self.selectWords(allPossibleWords);
+        let word = words.first().unwrap();
         self.board.putWordOnBoard(word.clone());
-        // TODO : If game is not finished but entropy is 0 game is considered failed game, we should do some backtracking
+        // TODO : If game is not finished but entropy is 0 attempt is considered a failed one, we should do some backtracking on possible words
 
         // Put selected word in a list of excluded words
         // TODO : Consider putting Word in used words
         self.used.push(word.clone().word);
-
 
         // self.printBoard()
     }
