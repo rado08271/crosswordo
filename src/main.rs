@@ -1,5 +1,5 @@
 use std::time::SystemTime;
-use crate::logic::controller::GameController;
+use crate::logic::controller::Controller;
 use unidecode::unidecode;
 
 mod entities;
@@ -42,7 +42,7 @@ fn main() {
     // const ROWS: usize = 6;
     // const COLS: usize = 6;
 
-    let mut controller = GameController::new("bola to celkom pekna stolicka vsak", ROWS, COLS, filteredDictionary);
+    let mut controller = Controller::new("bola to celkom pekna stolicka vsak", ROWS, COLS, filteredDictionary);
     // let mut controller = GameController::new("bola celkom pekna", ROWS, COLS, filteredDictionary);
     println!("processed solution in {}ms", started.elapsed().unwrap().as_millis());
 

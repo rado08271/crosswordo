@@ -1,30 +1,36 @@
+use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use crate::entities::board::Board;
+use crate::entities::direction::Direction;
 use crate::entities::solution::Solution;
 use crate::entities::trie::Trie;
 use crate::entities::word::Word;
 use crate::MAX;
 
-pub enum GameState {
+pub enum LoopState {
     INITIALIZED, PLAYING, FINISHED, FAILED
 }
 
-pub struct GameController {
+pub struct Controller {
     rows: usize, cols: usize,
     board: Board,
     dictionary: Trie,
     solution: Solution,
     used: Vec<String>,
-    historyStates: Vec<Vec<Word>>,
-    // should we cache for whole controller loop?
-    cache: HashMap<String, HashSet<String>>
+    // History holds information about word being placed
+    history: Vec<Word>,
+    // Will hold information about sequences and possible words for those sequences if it is
+    sequenceCache: HashMap<String, HashSet<String>>,
+    // Holds current state for a board. If a word is placed on board and game is not finished, it is
+    // recalculated in all possible directions
+    statesCache: HashMap<usize, Vec<Word>>
 }
 
 
-impl GameController {
+impl Controller {
     pub fn new(solution: &str, rows: usize, cols: usize, dictionary: Vec<String>) -> Self {
         let mut trie = Trie::new();
 
@@ -32,14 +38,15 @@ impl GameController {
             .filter(|word| word.len() >= MAX)
             .for_each(|word| trie.insert(word));
 
-        let mut controller = GameController {
+        let mut controller = Controller {
             rows, cols,
             board: Board::new(rows, cols),
             dictionary: trie,
             solution: Solution::new(solution, rows, cols),
             used: Vec::new(),
-            historyStates: Vec::new(),
-            cache: HashMap::new()
+            history: Vec::new(),
+            statesCache: HashMap::new(),
+            sequenceCache: HashMap::new()
         };
 
         // FIXME : We could rather have special function for this
@@ -67,7 +74,7 @@ impl GameController {
             .unwrap_or(0)
     }
 
-    pub fn selectWords(&mut self, possibleWords: &Vec<Vec<Word>>) -> Vec<Word> {
+    pub fn filterWords(&mut self, possibleWords: &Vec<Vec<Word>>) -> Vec<Word> {
         let entropyMin = self.getMinimumEntropy(possibleWords);
         if (entropyMin == 0) {
             panic!("Cannot be initiated")
@@ -107,7 +114,7 @@ impl GameController {
         let allPossibleWords = &self.calculatePossibleWords();
         // self.printEntropies(entropy);
         // TODO : Word Selection should take previous steps into consideration because it might get stuck
-        let words = &self.selectWords(allPossibleWords);
+        let words = &self.filterWords(allPossibleWords);
         let word = words.first().unwrap();
         self.board.putWordOnBoard(word.clone());
         // TODO : If game is not finished but entropy is 0 attempt is considered a failed one, we should do some backtracking on possible words
@@ -116,7 +123,32 @@ impl GameController {
         // TODO : Consider putting Word in used words
         self.used.push(word.clone().word);
 
+        // clear cache
+        self.invalidateCache(word);
         // self.printBoard()
+    }
+
+    fn invalidateCache(&mut self, word: &Word) {
+        // TODO : For each character in word (depth) calculate
+        for depth in 0..word.word.len() {
+            for dir in Direction::DIRECTION_MATRIX() {
+                let mut row = word.coords.0 as i32 + (word.direction.getRow() * depth as i32);
+                let mut col = word.coords.1 as i32 + (word.direction.getCol() * depth as i32);
+
+                // invalidate board.rows - row items or untill wall is touched
+                for idx in 0..max(self.rows, self.cols) {
+                    if row > 0 && col > 0 && row < self.rows as i32 && col < self.cols as i32 {
+                        println!("{}.{} r{}c{}", idx, (row as usize * self.rows + col as usize), row, col);
+                        // invalidate cache
+                        self.statesCache.remove(&(row as usize * self.rows + col as usize));
+                    }
+
+                    row += dir.getRow();
+                    col += dir.getCol();
+                }
+            }
+
+        }
     }
 
     fn calculateSolution(&mut self) -> bool {
@@ -141,32 +173,42 @@ impl GameController {
                 let mut avgSearch = 0;
                 let mut avgSearchA = 0;
                 print!("==== R{}C{} | ", rowIndex, colIndex);
-                let directionalSequences = self.board.getSequencesFromPosition(rowIndex, colIndex).unwrap_or_else(HashMap::new);
 
                 // HashSet ensures we don't have duplicit words
                 let mut words: Vec<Word> = Vec::new();
 
-                // From default sequence we might have
-                for (direction, sequence) in directionalSequences {
-                    // println!("dir {} - seq {}", direction.getIndex(), sequence);
-                    // for sequences lower than MAX we won't compile
-                    if (sequence.len() >= MAX) {
-                        for depth in MAX..(sequence.len() + 1) {
-                            let subsequence = &sequence[..depth];
-                            let searchStarted = SystemTime::now();
-                            let trieSearchResult = self.cache.entry(subsequence.to_string()).or_insert(self.dictionary.search(subsequence));
-                            // println!("\t\tsearch depth {} took {}ms", depth, searchStarted.elapsed().unwrap().as_millis());
-                            avgSearch = avgSearch + searchStarted.elapsed().unwrap().as_millis();
-                            avgSearchA = avgSearchA + 1;
-                            let wordsProcessed: Vec<Word> = trieSearchResult
+                if let Some (cached) = self.statesCache.get(&(rowIndex * self.rows + colIndex)) {
+                    words = cached.clone();
+                } else {
+                    let directionalSequences = self.board.getSequencesFromPosition(rowIndex, colIndex).unwrap_or_else(HashMap::new);
+
+                    // From default sequence we might have
+                    for (direction, sequence) in directionalSequences {
+                        // println!("dir {} - seq {}", direction.getIndex(), sequence);
+                        // for sequences lower than MAX we won't compile
+                        if (sequence.len() >= MAX) {
+                            // FIXME : Traversing all positions again is unnecessary
+                            for depth in MAX..(sequence.len() + 1) {
+                                let searchStarted = SystemTime::now();
+
+                                let subsequence = &sequence[..depth];
+                                let trieSearchResult = self.sequenceCache.entry(subsequence.to_string()).or_insert(self.dictionary.search(subsequence));
+
+                                // println!("\t\tsearch depth {} took {}ms", depth, searchStarted.elapsed().unwrap().as_millis());
+                                avgSearch = avgSearch + searchStarted.elapsed().unwrap().as_millis();
+                                avgSearchA = avgSearchA + 1;
+
+                                let wordsProcessed: Vec<Word> = trieSearchResult
                                     .iter()
                                     .filter(|word| !self.used.contains(word))
                                     .map(|word| Word::new(word.clone(), direction, (rowIndex, colIndex)))
                                     .collect();
 
-                            words.extend(wordsProcessed);
+                                words.extend(wordsProcessed);
+                            }
                         }
                     }
+                    self.statesCache.insert((rowIndex * self.rows + colIndex), words.clone());
                 }
 
                 // entropy.insert(rowIndex * self.rows + colIndex, words);
