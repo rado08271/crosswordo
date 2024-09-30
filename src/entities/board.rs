@@ -15,6 +15,9 @@ pub struct Board {
     pub cols: usize,
     pub rows: usize,
     pub board: Vec<Vec<char>>,
+    // will track each position with am info of first iteration
+    contributions: Vec<Vec<Option<usize>>>,
+    tracker: usize
 }
 
 impl Board {
@@ -32,6 +35,8 @@ impl Board {
             rows, cols,
             // Implement the logic to initialize the grid with wildcards ('*').
             board: vec![vec!['?'; cols]; rows],
+            contributions: vec![vec![None; cols]; rows],
+            tracker: 0
         }
     }
 
@@ -48,6 +53,12 @@ impl Board {
     // TODO : direction, position, word
     pub fn putWordOnBoard(&mut self, word: Word) {
         self.putSequenceOnBoard(word.word, word.coords.0, word.coords.1, word.direction);
+        self.tracker += 1;
+    }
+
+    pub fn removeWordFromBoard(&mut self, word: Word) {
+        self.removeSequenceFromBoard(word.word, word.coords.0, word.coords.1, word.direction);
+        self.tracker -= 1;
     }
 
     pub fn getSequencesFromPosition(&self, row: usize, col: usize) -> Option<HashMap<Direction, String>> {
@@ -100,6 +111,20 @@ impl Board {
         return Some(sequence);
     }
 
+    fn removeSequenceFromBoard(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
+        for (depth, c) in sequence.char_indices() {
+            let row = i32::try_from(row).unwrap() + (direction.getRow() * i32::try_from(depth).unwrap());
+            let col = i32::try_from(col).unwrap() + (direction.getCol() * i32::try_from(depth).unwrap());
+
+            if (row >= 0 && col >= 0) {
+                if Some(self.tracker) == self.contributions[row as usize][col as usize] {
+                    self.board[row as usize][col as usize] = '?';
+                    self.contributions[row as usize][col as usize] = None;
+                }
+            }
+        }
+    }
+
     fn putSequenceOnBoard(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
         for (depth, c) in sequence.char_indices() {
             let row = i32::try_from(row).unwrap() + (direction.getRow() * i32::try_from(depth).unwrap());
@@ -107,6 +132,7 @@ impl Board {
 
             if (row >= 0 && col >= 0) {
                 self.board[row as usize][col as usize] = c;
+                self.contributions[row as usize][col as usize].get_or_insert(self.tracker);
             }
         }
     }
