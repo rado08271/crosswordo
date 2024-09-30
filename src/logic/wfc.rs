@@ -46,7 +46,7 @@ impl WFC {
 
                     let wordsProcessed: Vec<Word> = trieSearchResult
                         .iter()
-                        .filter(|word| used.contains(word))
+                        .filter(|word| !used.contains(word))
                         .map(|word| Word::new(word.clone(), direction, (row, col)))
                         .collect();
 
