@@ -21,9 +21,7 @@ pub struct Controller {
     solution: Solution,
     // Trie is necessary only for entropy search
     dictionary: Trie,
-    // Words that were already used
-    used: Vec<String>,
-    // History holds information about word being placed
+    // History holds information about word being placed and words that were already used
     history: Vec<Word>,
     // Holds current state for a board. If a word is placed on board and game is not finished, it is
     // recalculated in all possible directions
@@ -45,8 +43,7 @@ impl Controller {
             rows, cols,
             board: Board::new(rows, cols),
             solution: Solution::new(solution, rows, cols),
-            dictionary: Trie::new(),
-            used: Vec::new(),
+            dictionary: trie,
             history: Vec::new(),
             states: BTreeMap::new(),
             sequenceCache: HashMap::new()
@@ -97,34 +94,36 @@ impl Controller {
         return randomWords;
     }
 
-    pub fn performAction(&mut self) {
-        // self.printBoard();
-
-        // self.printEntropies(entropy);
-        // TODO : Word Selection should take previous steps into consideration because it might get stuck
-        let words = &self.filterWords();
-
+    fn putOrBacktrack(&mut self, words: &Vec<Word>) {
         let word = words.first().unwrap();
 
+        // TODO : If loop is not finished but entropy is 0 attempt is considered a failed one, we should do some backtracking on possible words
         /**
-        *       Here We need to create the backtracking mechanism
-        *       - We need to recalculate entropies after word is put on board
-        *       - We need to select next word from a list of words
-        *       - If all words fail to fill the board we should go to
-        *       previous state in history
-        **/
+         *       Here We need to create the backtracking mechanism
+         *       - We need to recalculate entropies after word is put on board
+         *       - We need to select next word from a list of words
+         *       - If all words fail to fill the board we should go to
+         *       previous state in history
+         **/
 
 
         self.board.putWordOnBoard(word.clone());
-        // TODO : If game is not finished but entropy is 0 attempt is considered a failed one, we should do some backtracking on possible words
 
-        // Put selected word in a list of excluded words
-        // TODO : Consider putting Word in used words
-        self.used.push(word.clone().word);
 
         // clear cache
         self.invalidateStates(word);
-        // self.printBoard()
+
+    }
+
+    pub fn performAction(&mut self) {
+        self.printBoard();
+        // self.printEntropies(entropy);
+
+        let words = self.calculatePossibleWords();
+
+        let words = &self.filterWords();
+
+        self.putOrBacktrack(words);
     }
 
     fn invalidateStates(&mut self, word: &Word) {
@@ -134,12 +133,22 @@ impl Controller {
                 let mut row = word.coords.0 as i32 + (word.direction.getRow() * depth as i32);
                 let mut col = word.coords.1 as i32 + (word.direction.getCol() * depth as i32);
 
+                // TODO Reconsider !!!
                 // invalidate board.rows - row items or untill wall is touched
                 for idx in 0..max(self.rows, self.cols) {
                     if row > 0 && col > 0 && row < self.rows as i32 && col < self.cols as i32 {
-                        println!("{}.{} r{}c{}", idx, (row as usize * self.rows + col as usize), row, col);
-                        // invalidate cache
+                        let c = self.board.board[row as usize][col as usize];
+                        println!("{}.{} r{}c{} = [{}]", idx, (row as usize * self.rows + col as usize), row, col, c);
+
+                        if (c == '*') {
+                            break;
+                        }
+
+                        // invalidate states cache
                         self.states.remove(&(row as usize * self.rows + col as usize));
+                    } else {
+                        // if row or col is outside the board let's go to the next one
+                        break;
                     }
 
                     row += dir.getRow();
@@ -184,7 +193,7 @@ impl Controller {
 
                     words = WFC::calculateEntropyForACell(
                         rowIndex, colIndex, rowIndex * self.rows + colIndex,
-                        directionalSequences, &self.dictionary, self.used.clone(),
+                        directionalSequences, &self.dictionary, self.history.iter().map(|w| w.word.clone()).collect(),
                         &mut self.sequenceCache
                     );
 
