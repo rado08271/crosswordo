@@ -10,7 +10,8 @@ pub struct TrieNode {
 
 // Define the Trie structure itself, which includes the root node.
 pub struct Trie {
-    root: TrieNode
+    root: TrieNode,
+    items: usize
 }
 
 impl TrieNode {
@@ -27,56 +28,58 @@ impl Trie {
     pub fn new() -> Self {
         Trie {
             // The Trie struct will contain a root node which is an instance of TrieNode.
-            root: TrieNode::new()
+            root: TrieNode::new(),
+            items: 0
         }
     }
 
 
     // The insert method will add a word to the Trie by iterating through its characters and creating child nodes as necessary.
     pub fn insert(&mut self, word: &str) {
-        if word.len() <= MAX {
+        if word.len() < MAX {
             panic!("Word is too short to be inserted in trie")
         }
 
-        let mut rootNode = &mut self.root;
+        let mut root_node = &mut self.root;
         for key in word.chars() {
-            rootNode = rootNode.nodes.entry(key).or_insert_with(TrieNode::new)
+            root_node = root_node.nodes.entry(key).or_insert_with(TrieNode::new)
         }
 
-        rootNode.word = Some(word.to_string());
-        rootNode.eow = true;
+        root_node.word = Some(word.to_string());
+        root_node.eow = true;
+        self.items += 1;
     }
 
     // The search method will check if a word exists in the Trie by traversing the nodes according to the word's characters or wildcards (unknown characters).
     pub fn search(&self, sequence: &str) -> HashSet<String> {
-        let rootNode = &self.root;
+        let root_node = &self.root;
         let mut items: HashSet<String> = HashSet::new();
         // This function ensures traversing the Trie and passing available words in an array
-        self.dfsPatternSearch(rootNode, sequence, 0, &mut items);
+        self.dfs_pattern_search(root_node, sequence, 0, &mut items);
 
         items
     }
 
     // Recursive DFS function to find words that match the current partial pattern.
-    fn dfsPatternSearch(&self, mut rootNode: &TrieNode, sequence: &str, idx: usize, mut items: &mut HashSet<String>) -> bool {
+    fn dfs_pattern_search(&self, mut root_node: &TrieNode, sequence: &str, idx: usize, mut items: &mut HashSet<String>) -> bool {
         if sequence.len() == idx {
-            if rootNode.eow {
-                let word = rootNode.word.clone().unwrap();
+            if root_node.eow {
+                let word = root_node.word.clone().unwrap();
                 // Collect all words that match the pattern
                 items.insert(word);
             }
-            return rootNode.eow;
+            return root_node.eow;
         }
 
         // Continue until eow or could not find the pattern occurs
         if sequence.chars().nth(idx).eq(&Some('?')) {
             // Handle the wildcards and traverse every child node of current root accordingly.
-            for nextNode in rootNode.nodes.values() {
-                let result = self.dfsPatternSearch(&nextNode, sequence, idx + 1, items);
+            for nextNode in root_node.nodes.values() {
+                let result = self.dfs_pattern_search(&nextNode, sequence, idx + 1, items);
             }
-        } else if let Some(nextNode) = rootNode.nodes.get(&sequence.chars().nth(idx).unwrap()) {
+        } else if let Some(nextNode) = root_node.nodes.get(&sequence.chars().nth(idx).unwrap()) {
             // If the node is not a wildcards follow the child node if exists
-            return self.dfsPatternSearch(nextNode, sequence, idx + 1, items)
+            return self.dfs_pattern_search(nextNode, sequence, idx + 1, items)
         }
         return false;
     }

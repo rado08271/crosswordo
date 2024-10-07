@@ -4,13 +4,7 @@ use std::fmt::format;
 use crate::entities::direction::Direction;
 use crate::entities::solution::Solution;
 use crate::entities::word::Word;
-// static DIRECTION_MATRIX: [Direction; 9] = [
-//     (-1, -1), (-1, 0), (-1, 1),
-//     ( 0, -1), ( 0, 0), ( 0, 1),
-//     ( 1, -1), ( 1, 0), ( 1, 1),
-// ];
 
-//  2D array (vector of vectors) is suitable in Rust.
 pub struct Board {
     pub cols: usize,
     pub rows: usize,
@@ -40,7 +34,7 @@ impl Board {
         }
     }
 
-    pub fn putSolutionOnBoard(&mut self, solution: &Solution) {
+    pub fn put_solution_on_board(&mut self, solution: &Solution) {
         for (position, c) in solution.locations.clone() {
             let row = position / self.cols;
             let col = position % self.cols;
@@ -51,20 +45,20 @@ impl Board {
     }
 
     // TODO : direction, position, word
-    pub fn putWordOnBoard(&mut self, word: Word) {
-        self.putSequenceOnBoard(word.word, word.coords.0, word.coords.1, word.direction);
+    pub fn put_word_on_board(&mut self, word: Word) {
+        self.put_sequence_on_board(word.word, word.coords.0, word.coords.1, word.direction);
         self.tracker += 1;
     }
 
-    pub fn removeWordFromBoard(&mut self, word: Word) {
-        self.removeSequenceFromBoard(word.word, word.coords.0, word.coords.1, word.direction);
+    pub fn remove_word_from_board(&mut self, word: Word) {
+        self.remove_sequence_from_board(word.word, word.coords.0, word.coords.1, word.direction);
         self.tracker -= 1;
     }
 
-    pub fn getSequencesFromPosition(&self, row: usize, col: usize) -> Option<HashMap<Direction, String>> {
+    pub fn get_sequences_from_position(&self, row: usize, col: usize) -> Option<HashMap<Direction, String>> {
         let c = self.board[row][col];
 
-        if c != '?' {
+        if c == '*' {
             // return [Default::default(); 9];
             return None;
         }
@@ -72,11 +66,11 @@ impl Board {
         // let mut sequences: [String; 9] = [Default::default(); 9];
         let mut sequences: HashMap<Direction, String> = HashMap::new();
 
-        let maxDepth = max(i32::try_from(self.rows).unwrap(), i32::try_from(self.cols).unwrap());
+        let max_depth = max(i32::try_from(self.rows).unwrap(), i32::try_from(self.cols).unwrap());
 
         // first check if it's not a solution stuff
         for DIRECTION_MATRIX_CELL in Direction::DIRECTION_MATRIX() {
-            let sequence = (self.getCurrentSequence(maxDepth, i32::try_from(row).unwrap(), i32::try_from(col).unwrap(), &DIRECTION_MATRIX_CELL));
+            let sequence = (self.get_current_sequence(max_depth, i32::try_from(row).unwrap(), i32::try_from(col).unwrap(), &DIRECTION_MATRIX_CELL));
             sequences.insert(DIRECTION_MATRIX_CELL, sequence.unwrap_or(String::new()));
             // sequences[DIRECTION_MATRIX_CELL.getIndex()] = sequence;
         }
@@ -84,34 +78,37 @@ impl Board {
         return Some(sequences);
     }
 
-    fn getCurrentSequence(&self, maxLength: i32, row: i32, col: i32, direction: &Direction) -> Option<String> {
+    fn get_current_sequence(&self, max_length: i32, row: i32, col: i32, direction: &Direction) -> Option<String> {
         if *direction == Direction::CENTER() {
             return None;
         }
 
         let mut sequence = String::from("");
 
-        for depth in 0..maxLength {
-            let rowDirection = (direction.getRow() * depth) + row;
-            let colDirection = (direction.getCol() * depth) + col;
+        for depth in 0..max_length {
+            let row_direction = (direction.getRow() * depth) + row;
+            let col_direction = (direction.getCol() * depth) + col;
 
-            if rowDirection < 0 || colDirection < 0 || rowDirection >= (i32::try_from(self.rows).unwrap()) || colDirection >= (i32::try_from(self.cols).unwrap()) {
+            if row_direction < 0 || col_direction < 0 || row_direction >= (i32::try_from(self.rows).unwrap()) || col_direction >= (i32::try_from(self.cols).unwrap()) {
                 break;
             }
 
-            let c = self.board[rowDirection as usize][colDirection as usize];
+            let c = self.board[row_direction as usize][col_direction as usize];
             if (c == '*') {
                 break;
             }
 
-
             sequence.push(c);
         }
 
+        // FIXME if sequence is all existing chars, we should skit it
+        if !sequence.contains('?') {
+            return None;
+        }
         return Some(sequence);
     }
 
-    fn removeSequenceFromBoard(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
+    fn remove_sequence_from_board(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
         for (depth, c) in sequence.char_indices() {
             let row = i32::try_from(row).unwrap() + (direction.getRow() * i32::try_from(depth).unwrap());
             let col = i32::try_from(col).unwrap() + (direction.getCol() * i32::try_from(depth).unwrap());
@@ -125,7 +122,7 @@ impl Board {
         }
     }
 
-    fn putSequenceOnBoard(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
+    fn put_sequence_on_board(&mut self, sequence: String, row: usize, col: usize, direction: Direction) {
         for (depth, c) in sequence.char_indices() {
             let row = i32::try_from(row).unwrap() + (direction.getRow() * i32::try_from(depth).unwrap());
             let col = i32::try_from(col).unwrap() + (direction.getCol() * i32::try_from(depth).unwrap());

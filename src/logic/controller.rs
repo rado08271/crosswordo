@@ -1,8 +1,7 @@
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::hash::Hash;
 use std::time::SystemTime;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use crate::entities::board::Board;
 use crate::entities::direction::Direction;
 use crate::entities::solution::Solution;
@@ -25,9 +24,9 @@ pub struct Controller {
     history: Vec<Word>,
     // Holds current state for a board. If a word is placed on board and game is not finished, it is
     // recalculated in all possible directions
-    states: BTreeMap<usize, Vec<Word>>,
+    states: HashMap<usize, Vec<Word>>,
     // Will hold information about sequences so no dictionary search is needed
-    sequenceCache: HashMap<String, HashSet<String>>,
+    sequence_cache: HashMap<String, HashSet<String>>,
 }
 
 
@@ -45,18 +44,33 @@ impl Controller {
             solution: Solution::new(solution, rows, cols),
             dictionary: trie,
             history: Vec::new(),
-            states: BTreeMap::new(),
-            sequenceCache: HashMap::new()
+            states: HashMap::new(),
+            sequence_cache: HashMap::new()
         };
 
         // FIXME : We could rather have special function for this
-        controller.calculateSolution();
-        controller.setupWallsOnBoard();
+        controller.prepare_solution();
+
 
         return controller;
     }
 
-    pub fn printBoard(&self) {
+
+    fn prepare_solution(&mut self) -> bool {
+        let state = self.solution.calculate_constraints();
+
+        if (!state) {
+            panic!("Could not place solution, try again")
+        }
+
+        self.solution.print_solution_on_board();
+        self.board.put_solution_on_board(&self.solution);
+
+        state
+    }
+
+
+    pub fn print_board(&self) {
         for row in &self.board.board {
             for col in row {
                 print!("{}\t", col);
@@ -65,68 +79,61 @@ impl Controller {
         }
     }
 
+    pub fn perform_action(&mut self) {
+        self.print_board();
 
-    pub fn filterWords(&mut self) -> Vec<Word> {
-        let entropyMin = self.states
-            .iter()
-            .filter(|(_, words)| !words.is_empty())
-            .map(|(_, words)| words.len())
-            .min()
-            .unwrap_or(0);
-
-        if (entropyMin == 0) {
-            panic!("Cannot be initiated")
-        }
-        // TODO : Add weight to each direction or calculate weights based on all positions, open position and words in certain direction
-
-        // We will save all possible positions for lowest entropies and select single word (for any direction) to put on board
-        let mut savedWords: Vec<Word> = Vec::new();
-        self.states
-            .iter()
-            .filter(|(_, words)| words.len() == entropyMin)
-            .for_each(|(_, words)| savedWords.extend(words.clone()));
-
-        let randomWords: Vec<Word> = savedWords
-            .choose_multiple(&mut thread_rng(), savedWords.len())
-            .cloned().collect::<Vec<Word>>();
-
-        // println!("min {} dir {} words {} R{}C{}", entropyMin, randomWord.direction.getIndex(), randomWord.word, randomWord.coords.0, randomWord.coords.1);
-        return randomWords;
-    }
-
-    fn putOrBacktrack(&mut self, words: &Vec<Word>) {
-        let word = words.first().unwrap();
-
-        // TODO : If loop is not finished but entropy is 0 attempt is considered a failed one, we should do some backtracking on possible words
-        /**
-         *       Here We need to create the backtracking mechanism
-         *       - We need to recalculate entropies after word is put on board
-         *       - We need to select next word from a list of words
-         *       - If all words fail to fill the board we should go to
-         *       previous state in history
-         **/
-
-
-        self.board.putWordOnBoard(word.clone());
-
-
-        // clear cache
-        self.invalidateStates(word);
-
-    }
-
-    pub fn performAction(&mut self) {
-        self.printBoard();
-        // self.printEntropies(entropy);
-
-        let words = self.calculatePossibleWords();
+        self.calculate_possible_states();
 
         let words = &self.filterWords();
 
         self.putOrBacktrack(words);
     }
 
-    fn invalidateStates(&mut self, word: &Word) {
+    fn backtrack(&mut self) -> bool {
+        // Initiate all states
+        // let mut states: HashMap::new();
+        self.calculate_possible_states();
+
+        // Find word based on states and return lowest entropy words
+        let words: Vec<Word> = WFC::find_lowest_entopy_words();
+
+        for word in words {
+            // For all lowest entropy words put first word on board
+            self.board.put_word_on_board(word)
+
+            // Remove necessary states
+
+            // Initiate states
+
+            // Recalculate entropies
+
+            /** If entropy is 0
+                       - remove word from board
+                       - if no more words are available go one recursive step back - return false
+                       - continue in for loop
+                   **/
+
+            /** If entropy is >0
+                       - go to next state (call this function again with new states as param)
+                   **/
+
+            // in the end return true
+        }
+
+
+
+        return false;
+    }
+
+    fn invalidate_all_states(&mut self) {
+        for row in 0..self.rows {
+            for col in 0..self.cols {
+                self.states.remove(&(row * self.rows + col));
+            }
+        }
+    }
+
+    fn invalidate_required_states(&mut self, word: &Word) {
         // TODO : For each character in word (depth) calculate
         for depth in 0..word.word.len() {
             for dir in Direction::DIRECTION_MATRIX() {
@@ -138,7 +145,7 @@ impl Controller {
                 for idx in 0..max(self.rows, self.cols) {
                     if row > 0 && col > 0 && row < self.rows as i32 && col < self.cols as i32 {
                         let c = self.board.board[row as usize][col as usize];
-                        println!("{}.{} r{}c{} = [{}]", idx, (row as usize * self.rows + col as usize), row, col, c);
+                        // println!("{}.{} r{}c{} = [{}]", idx, (row as usize * self.rows + col as usize), row, col, c);
 
                         if (c == '*') {
                             break;
@@ -159,57 +166,28 @@ impl Controller {
         }
     }
 
-    fn calculateSolution(&mut self) -> bool {
-        self.solution.calculateConstraints()
-    }
-
-    fn setupWallsOnBoard(&mut self) {
-        self.board.putSolutionOnBoard(&self.solution);
-    }
-
-    fn calculatePossibleWords(&mut self) -> Vec<Vec<Word>> {
-        // FIXME : Remove
-        let start = SystemTime::now();
-
-        // each position may have words in 9 directions (8 + center)
-        let mut possibleWords: Vec<Vec<Word>> = Vec::new();
-
+    fn calculate_possible_states(&mut self)  {
         // For each row and col (each cell) traverse the position in all directions
         for (rowIndex, row) in self.board.board.iter().enumerate() {
             for (colIndex, col) in row.iter().enumerate() {
-
-                let started = SystemTime::now();
-                let mut avgSearch = 0;
-                let mut avgSearchA = 0;
-
-                print!("==== R{}C{} | ", rowIndex, colIndex);
-
                 let mut words: Vec<Word> = Vec::new();
 
+                // Check states, if a word already has state do not process again, otherwise if states are invalidated get states
                 if let Some (cached) = self.states.get(&(rowIndex * self.rows + colIndex)) {
                     words = cached.clone();
                 } else {
-                    let directionalSequences = self.board.getSequencesFromPosition(rowIndex, colIndex).unwrap_or_else(HashMap::new);
+                    let directional_sequences = self.board.get_sequences_from_position(rowIndex, colIndex).unwrap_or_else(HashMap::new);
 
-                    words = WFC::calculateEntropyForACell(
+                    words = WFC::calculate_entropy_for_acell(
                         rowIndex, colIndex, rowIndex * self.rows + colIndex,
-                        directionalSequences, &self.dictionary, self.history.iter().map(|w| w.word.clone()).collect(),
-                        &mut self.sequenceCache
+                        directional_sequences, &self.dictionary, self.history.iter().map(|w| w.word.clone()).collect(),
+                        &mut self.sequence_cache
                     );
 
                     self.states.insert((rowIndex * self.rows + colIndex), words.clone());
                 }
-
-                possibleWords.push(words);
-                if avgSearchA <= 0 {
-                    avgSearchA = 1
-                }
-                println!(" seq ${}ms | avg ({}ms) per searchs ({}x) | took {}ms ", started.elapsed().unwrap().as_millis(), avgSearch, avgSearchA, avgSearch / avgSearchA);
-
             }
         }
-        println!("calculating entropy took {}ms", start.elapsed().unwrap().as_millis());
-        possibleWords
     }
 
 }

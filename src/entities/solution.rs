@@ -11,54 +11,54 @@ use crate::MAX;
 
 pub struct Solution {
     rows: usize, cols: usize,
-    pub locations: BTreeMap<usize, char>,
+    pub locations: HashMap<usize, char>,
     processed: String
 }
 
 impl Solution {
     pub fn new(input: &str, rows: usize, cols: usize) -> Solution {
         // The preprocessing of an input removes special characters, whitespaces and numeric characters
-        let maxLength: usize = ((cols * rows) / 2);
+        let max_length: usize = ((cols * rows) / 2);
         let output: String = input.to_lowercase().chars().filter(|c| c.is_alphabetic()).collect();
 
         if output.len() == 0 {
             panic!("Support for no solution is not available.");
         }
 
-        if output.len() > maxLength {
-            panic!("The solution you provided is too long, please ensure you solution does not exceeds {}!", maxLength);
+        if output.len() > max_length {
+            panic!("The solution you provided is too long, please ensure you solution does not exceeds {}!", max_length);
         }
 
         Solution {
             rows, cols,
-            locations: BTreeMap::new(),
+            locations: HashMap::new(),
             processed: output
         }
     }
 
-    pub fn calculateConstraints(&mut self) -> bool {
+    pub fn calculate_constraints(&mut self) -> bool {
 
         // First we devide the whole board into the clusters based on solution length
         let mut clusters: Vec<Vec<(usize, usize)>> = Vec::new();
-        let clusterSize: usize = (self.cols * self.rows) / self.processed.len();
-        let clusterRemainder = (self.rows * self.cols) % self.processed.len();
+        let cluster_size: usize = (self.cols * self.rows) / self.processed.len();
+        let cluster_remainder = (self.rows * self.cols) % self.processed.len();
 
         for clusterNumber in 0..self.processed.len() {
-            let remainder = (i32::try_from(clusterNumber + clusterRemainder).unwrap() - i32::try_from(self.processed.len()).unwrap() + 1);
+            let remainder = (i32::try_from(clusterNumber + cluster_remainder).unwrap() - i32::try_from(self.processed.len()).unwrap() + 1);
 
-            let clusterPositions: Range<usize> = if (remainder <= 0) {
-                 (clusterNumber * clusterSize ) .. ((clusterNumber + 1) * clusterSize)
+            let cluster_positions: Range<usize> = if (remainder <= 0) {
+                 (clusterNumber * cluster_size) .. ((clusterNumber + 1) * cluster_size)
             } else {
-                let tempUsizeRemainder = usize::try_from(remainder).unwrap_or(0);
-                (clusterNumber * clusterSize + tempUsizeRemainder - 1) .. ((clusterNumber + 1) * clusterSize + tempUsizeRemainder)
+                let temp_usize_remainder = usize::try_from(remainder).unwrap_or(0);
+                (clusterNumber * cluster_size + temp_usize_remainder - 1) .. ((clusterNumber + 1) * cluster_size + temp_usize_remainder)
             };
 
             clusters.push(
-                clusterPositions.map(|position| {
-                    let rowIdx = position / self.cols;
-                    let colIdx = position % self.cols;
+                cluster_positions.map(|position| {
+                    let row_idx = position / self.cols;
+                    let col_idx = position % self.cols;
 
-                    return (rowIdx, colIdx)
+                    return (row_idx, col_idx)
                 }).collect()
             );
         }
@@ -66,7 +66,7 @@ impl Solution {
         // for each cluster we are trying to find ideal position
         for cluster in clusters {
             // If there is at least once a situation where there is nowhere to put the solution it cannot be constructed
-            if !self.placeInCluster(cluster) {
+            if !self.place_in_cluster(cluster) {
                 println!("placement seems invalid");
                 return false;
             }
@@ -77,16 +77,16 @@ impl Solution {
     }
 
     // We will go through shuffled cluster and try to put the solution on board
-    fn placeInCluster(&mut self, cluster: Vec<(usize, usize)>) -> bool{
-        let shuffleCluster: Vec<_> = cluster.choose_multiple(&mut thread_rng(), cluster.len()).cloned().collect();
-        let clusterItem = self.processed.chars().nth(self.locations.len()).unwrap();
+    fn place_in_cluster(&mut self, cluster: Vec<(usize, usize)>) -> bool{
+        let shuffle_cluster: Vec<_> = cluster.choose_multiple(&mut thread_rng(), cluster.len()).cloned().collect();
+        let cluster_item = self.processed.chars().nth(self.locations.len()).unwrap();
 
-        for (row, col) in shuffleCluster {
-            if self.isValidPlacement(row, col) {
-                let currentLocation: usize = (row * self.cols) + col;
-                self.locations.insert(currentLocation, clusterItem);
-                if (!self.revalidateSolution()) {
-                    self.locations.remove(&currentLocation);
+        for (row, col) in shuffle_cluster {
+            if self.is_valid_placement(row, col) {
+                let current_location: usize = (row * self.cols) + col;
+                self.locations.insert(current_location, cluster_item);
+                if (!self.revalidate_solution()) {
+                    self.locations.remove(&current_location);
                 } else {
                     return true;
                 }
@@ -95,11 +95,9 @@ impl Solution {
         return false
     }
 
-    fn isValidPlacement(&self, row: usize, col: usize) -> bool {
-        let currentLocation: usize = (row * self.cols) + col;
-
+    fn is_valid_placement(&self, row: usize, col: usize) -> bool {
         for DIRECTION_MATRIX_CELL in Direction::DIRECTION_MATRIX() {
-            if self.isValidInLine(1, DIRECTION_MATRIX_CELL, row, col) {
+            if self.is_valid_in_line(1, DIRECTION_MATRIX_CELL, row, col) {
                 return true
             }
         }
@@ -107,18 +105,18 @@ impl Solution {
         return false;
     }
 
-    fn isValidInLine(&self, depth: i32, directionIndex: Direction, row: usize, col: usize) -> bool {
-        let rowDirection = (directionIndex.getRow() * depth) + i32::try_from(row).unwrap();
-        let colDirection = (directionIndex.getCol() * depth) + i32::try_from(col).unwrap();
-        let directionalIdx = (rowDirection * i32::try_from(self.cols).unwrap()) + colDirection;
+    fn is_valid_in_line(&self, depth: i32, direction_index: Direction, row: usize, col: usize) -> bool {
+        let row_direction = (direction_index.getRow() * depth) + i32::try_from(row).unwrap();
+        let col_direction = (direction_index.getCol() * depth) + i32::try_from(col).unwrap();
+        let directional_idx = (row_direction * i32::try_from(self.cols).unwrap()) + col_direction;
 
-        if rowDirection != i32::try_from(row).unwrap() || colDirection != i32::try_from(col).unwrap() {
-            if rowDirection >= 0 && colDirection >= 0 && rowDirection < (i32::try_from(self.rows).unwrap()) && colDirection < (i32::try_from(self.cols).unwrap()) {
-                if self.locations.get(&(usize::try_from(directionalIdx).unwrap())).is_none() {
+        if row_direction != i32::try_from(row).unwrap() || col_direction != i32::try_from(col).unwrap() {
+            if row_direction >= 0 && col_direction >= 0 && row_direction < (i32::try_from(self.rows).unwrap()) && col_direction < (i32::try_from(self.cols).unwrap()) {
+                if self.locations.get(&(usize::try_from(directional_idx).unwrap())).is_none() {
                     if depth == i32::try_from(MAX).unwrap() {
                         return true;
                     }
-                    return self.isValidInLine(depth + 1, directionIndex, row, col);
+                    return self.is_valid_in_line(depth + 1, direction_index, row, col);
                 }
             }
         }
@@ -126,23 +124,23 @@ impl Solution {
         return false;
     }
 
-    fn revalidateSolution(&self) -> bool {
-        let mut isValidBoard = true;
+    fn revalidate_solution(&self) -> bool {
+        let mut is_valid_board = true;
         for (position, c) in &self.locations {
             let row = *position / self.cols;
             let col = *position % self.cols;
 
-            isValidBoard = self.isValidPlacement(row, col);
+            is_valid_board = self.is_valid_placement(row, col);
 
-            if !isValidBoard {
+            if !is_valid_board {
                 return false;
             }
         }
 
-        return isValidBoard
+        return is_valid_board
     }
 
-    pub fn printSolutionOnBoard(&mut self) {
+    pub fn print_solution_on_board(&mut self) {
         let mut board: Vec<char> = vec!['?'; self.rows * self.cols];
         for (position, c) in &self.locations {
             board[*position] =  *c;
@@ -150,8 +148,8 @@ impl Solution {
 
         for row in 0..self.rows {
             for col in 0..self.cols {
-                let currentPosition = row * self.cols + col;
-                print!("{}\t", board.iter().nth(currentPosition).unwrap());
+                let current_position = row * self.cols + col;
+                print!("{}\t", board.iter().nth(current_position).unwrap());
             }
 
             println!("");
@@ -227,7 +225,7 @@ mod tests {
     #[test]
     fn test_is_valid() {
         let mut solution = Solution::new("testtesttest", 4, 6);
-        let result = solution.calculateConstraints();
+        let result = solution.calculate_constraints();
 
         if result {
             let mut prevItem: usize = 0;
