@@ -32,7 +32,7 @@ impl WFC {
             .min()
             .unwrap_or(0);
 
-        println!("entropy {}", entropy_min);
+        // println!("entropy {}", entropy_min);
         return entropy_min;
     }
 

@@ -34,6 +34,29 @@ impl Board {
         }
     }
 
+    pub fn print_board(&self) {
+        for row in 0..self.rows {
+            for col in 0..self.cols {
+                print!("{}-{:0>2}\t", self.board[row][col], self.contributions[row][col].unwrap_or(99));
+            }
+            println!();
+        }
+    }
+
+    pub fn is_board_populated(&self) -> bool {
+        // if board has at least 1 questionmark it's not finished yet
+        for row in 0..self.rows {
+            for col in 0..self.cols {
+                if Some(self.board[row][col]).unwrap() == '?' {
+                    return false
+                }
+            }
+        }
+
+        return true;
+
+    }
+
     pub fn put_solution_on_board(&mut self, solution: &Solution) {
         for (position, c) in solution.locations.clone() {
             let row = position / self.cols;
@@ -45,14 +68,24 @@ impl Board {
     }
 
     // TODO : direction, position, word
-    pub fn put_word_on_board(&mut self, word: Word) {
-        self.put_sequence_on_board(word.word, word.coords.0, word.coords.1, word.direction);
+    pub fn put_word_on_board(&mut self, word: &Word) {
+        let Word {word: w, direction, coords: (row, col), .. } = word.clone();
+
+        self.put_sequence_on_board(w, row, col, direction);
         self.tracker += 1;
+
+        println!("===== putting {}. word {} at R{}C{}[{}] =====", self.tracker, word.clone().word, row, col, direction.getIndex());
+        self.print_board()
     }
 
-    pub fn remove_word_from_board(&mut self, word: Word) {
-        self.remove_sequence_from_board(word.word, word.coords.0, word.coords.1, word.direction);
+    pub fn remove_word_from_board(&mut self, word: &Word) {
+        let Word {word: w, direction, coords: (row, col), ..} = word.clone();
+
         self.tracker -= 1;
+        self.remove_sequence_from_board(w, row, col, direction);
+
+        println!("===== removing {}. word {} at R{}C{}[{}] =====", self.tracker + 1, word.clone().word, row, col, direction.getIndex());
+        self.print_board()
     }
 
     pub fn get_sequences_from_position(&self, row: usize, col: usize) -> Option<HashMap<Direction, String>> {

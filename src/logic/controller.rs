@@ -69,59 +69,66 @@ impl Controller {
         state
     }
 
-
-    pub fn print_board(&self) {
-        for row in &self.board.board {
-            for col in row {
-                print!("{}\t", col);
-            }
-            println!();
+    pub fn perform_action(&mut self) {
+        if self.backtrack(0) {
+            println!("Backtracking success");
+        } else {
+            println!("Backtracking failure");
         }
     }
 
-    pub fn perform_action(&mut self) {
-        self.print_board();
-
-        self.calculate_possible_states();
-
-        let words = &self.filterWords();
-
-        self.putOrBacktrack(words);
-    }
-
-    fn backtrack(&mut self) -> bool {
+    // FIXME It fails probably due to errors with processing
+    fn backtrack(&mut self, step: usize) -> bool {
         // Initiate all states
-        // let mut states: HashMap::new();
+        // FIXME : It's explicit
         self.calculate_possible_states();
 
         // Find word based on states and return lowest entropy words
-        let words: Vec<Word> = WFC::find_lowest_entopy_words();
+        let words: Vec<Word> = WFC::find_random_lowest_entropy_words(&self.states);
 
-        for word in words {
+        for (idx, word) in words.iter().enumerate() {
             // For all lowest entropy words put first word on board
-            self.board.put_word_on_board(word)
+            // FIXME We should check if a word is not already used
+            let history: Vec<String> = self.history.iter().map(|w|w.clone().word).collect();
+            if !history.contains(&word.word) {
+                self.board.put_word_on_board(word);
+            }
+
+            if (self.board.is_board_populated()) {
+                return true;
+            }
 
             // Remove necessary states
+            self.invalidate_all_states();
 
-            // Initiate states
+            // Initiate states and recalculate entropies
+            self.calculate_possible_states();
 
-            // Recalculate entropies
-
+            let min_entropy = WFC::find_lowest_entropy(&self.states);
             /** If entropy is 0
-                       - remove word from board
-                       - if no more words are available go one recursive step back - return false
-                       - continue in for loop
-                   **/
+                - remove word from board
+                - if no more words are available go one recursive step back - return false
+                - continue in for loop
+            **/
+            if (min_entropy == 0) {
+                self.board.remove_word_from_board(word);
+                continue
+            }
 
             /** If entropy is >0
-                       - go to next state (call this function again with new states as param)
-                   **/
+                - go to next state (call this function again with new states as param)
+            **/
+            if self.backtrack(step + 1) {
+                return true
+            }
 
-            // in the end return true
+            // If we are unsuccessfully at the end, remove and process
+            self.board.remove_word_from_board(word);
         }
 
 
 
+        // in the end return true
         return false;
     }
 

@@ -1,9 +1,9 @@
 use std::time::SystemTime;
 use crate::logic::controller::Controller;
 use unidecode::unidecode;
-
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 mod entities;
-mod utils;
 mod logic;
 
 static  BOARD: [[char; 5]; 5] = [
@@ -29,10 +29,15 @@ const MAX: usize = 3;
 fn main() {
 
     // let dictionary = vec![String::from("space"), String::from("place"), String::from("craze"), String::from("crate"), String::from("state"), String::from("plate"), String::from("blade"), String::from("blato"), String::from("care"), String::from("spar")];
-    let dictionary: Vec<String> = read_dictionary("./res/en.dr");
+    let mut dictionary: Vec<String> = read_dictionary("./res/en.dr");
 
     // filter using ruleset
-    let filtered_dictionary: Vec<String> = dictionary.iter().map(|stn| unidecode(stn.to_lowercase().as_str())).filter(|e| e.len() >= MAX).collect();
+    let filtered_dictionary: Vec<String> = dictionary
+        .choose_multiple(&mut thread_rng(), dictionary.len())
+        .cloned()
+        .map(|stn| unidecode(stn.to_lowercase().as_str()))
+        .filter(|e| e.len() >= MAX)
+        .collect::<Vec<String>>()[0..].to_vec();
 
     const ROWS: usize = 4;
     const COLS: usize = 6;
@@ -43,10 +48,8 @@ fn main() {
     // for i in 0..3 {
     let mut i = 0;
     // loop {
-    for _ in 0..20 {
-        println!("========== {} ==========\t\t{}ms", i, started.elapsed().unwrap().as_millis());
+    // for _ in 0..20 {
         controller.perform_action();
-        i+=1;
-        controller.print_board();
-    }
+        // i+=1;
+    // }
 }
